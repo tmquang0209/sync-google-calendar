@@ -37,7 +37,7 @@ export class AuthService {
                 message: "Login successfully",
                 data: {
                     ...user.data(),
-                    accessToken: this.tokensService.generateAccessToken(
+                    accessToken: await this.tokensService.generateAccessToken(
                         user.id,
                     ),
                     refreshToken: this.tokensService.generateRefreshToken(

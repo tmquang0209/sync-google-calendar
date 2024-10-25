@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsDateString, IsNotEmpty, IsString } from "class-validator";
 
 export class CreateScheduleDto {
     @IsString({
@@ -14,12 +14,17 @@ export class CreateScheduleDto {
     })
     description: string;
 
-    start: Date;
+    @IsDateString({
+        strict: true,
+    })
+    startDate: Date;
 
-    end: Date;
+    @IsDateString({
+        strict: true,
+    })
+    endDate: Date;
     allDay: boolean;
     location: string;
     attendees: string[];
     reminders: string[];
-    calendarId: string;
 }

@@ -5,6 +5,9 @@ import * as fs from "fs/promises";
 import { google } from "googleapis";
 import * as path from "path";
 import * as process from "process";
+import { HelperService } from "src/common/helpers";
+import { CreateEventDto } from "./dto/create-event.dto";
+import { SearchEventDto } from "./dto/search-event.dto";
 
 @Injectable()
 export class GoogleCalendarService {
@@ -15,6 +18,8 @@ export class GoogleCalendarService {
         process.cwd(),
         "credentials.json",
     );
+
+    constructor() {}
 
     /**
      * Reads previously authorized credentials from the save file.
@@ -51,6 +56,7 @@ export class GoogleCalendarService {
      */
     public async authorize() {
         let client = (await this.loadSavedCredentialsIfExist()) as any;
+
         if (client) {
             return client;
         }
@@ -89,50 +95,59 @@ export class GoogleCalendarService {
     /**
      * Lists the next 10 events on the user's primary calendar.
      */
-    public async listEvents() {
+    public async listEvents({ timeMin, timeMax, description }: SearchEventDto) {
         const auth = await this.authorize();
         const calendar = google.calendar({ version: "v3", auth: auth as any });
 
         const res = await calendar.events.list({
             calendarId: "primary",
-            timeMin: new Date().toISOString(),
-            maxResults: 10,
+            timeMin: timeMin,
+            timeMax: timeMax,
             singleEvents: true,
             orderBy: "startTime",
+            q: description,
         });
 
         const events = res.data.items;
-        if (!events || events.length === 0) {
-            this.logger.log("No upcoming events found.");
-            return;
-        }
+        // if (!events || events.length === 0) {
+        //     this.logger.log("No upcoming events found.");
+        //     return;
+        // }
 
-        this.logger.log("Upcoming 10 events:");
-        events.map((event) => {
-            const start = event.start.dateTime || event.start.date;
-            this.logger.log(`${start} - ${event.summary}`);
-        });
+        // this.logger.log("Upcoming 10 events:");
+        // events.map((event) => {
+        //     const start = event.start.dateTime || event.start.date;
+        //     this.logger.log(`${start} - ${event.summary}`);
+        // });
+
+        return events;
     }
 
-    public async createEvent() {
+    public async createEvent({
+        summary,
+        location,
+        description,
+        start,
+        end,
+        attendees,
+    }: CreateEventDto) {
         const auth = await this.authorize();
         const calendar = google.calendar({ version: "v3", auth: auth as any });
 
         const event = {
-            summary: "Google I/O 2024",
-            location: "800 Howard St., San Francisco, CA 94103",
-            description:
-                "A chance to hear more about Google's developer products.",
+            summary: summary,
+            location: location,
+            description: description,
             start: {
-                dateTime: "2024-10-28T09:00:00-07:00",
-                timeZone: "America/Los_Angeles",
+                dateTime: start.dateTime,
+                timeZone: start.timeZone,
             },
             end: {
-                dateTime: "2024-10-28T17:00:00-07:00",
-                timeZone: "America/Los_Angeles",
+                dateTime: end.dateTime,
+                timeZone: end.timeZone,
             },
-            recurrence: ["RRULE:FREQ=DAILY;COUNT=2"],
-            attendees: [{ email: "minhquang4a@gmail.com" }],
+            attendees: attendees ? attendees : [],
+            // attendees: attendees,
             reminders: {
                 useDefault: false,
                 overrides: [
@@ -148,5 +163,113 @@ export class GoogleCalendarService {
         });
 
         this.logger.log(`Event created: ${result.data.htmlLink}`);
+    }
+
+    public async deleteEventByKeyword(keyword: string) {
+        const auth = await this.authorize();
+        const calendar = google.calendar({ version: "v3", auth: auth as any });
+
+        const res = await calendar.events.list({
+            calendarId: "primary",
+            timeMin: new Date("2024-10-23").toISOString(),
+            singleEvents: true,
+            orderBy: "startTime",
+            q: keyword,
+        });
+
+        const events = res.data.items;
+
+        for (const event of events) {
+            if (event.description.includes(keyword)) {
+                await calendar.events.delete({
+                    calendarId: "primary",
+                    eventId: event.id,
+                });
+            }
+        }
+    }
+
+    public async syncEvents(schedules: any) {
+        const auth = await this.authorize();
+        const calendar = google.calendar({ version: "v3", auth: auth as any });
+        // get all schedules from the database
+
+        for (const schedule of schedules) {
+            // process date
+            const startDate = HelperService.formatDateWithTimezone(
+                new Date(schedule.startDate),
+                "Asia/Ho_Chi_Minh",
+            );
+
+            const endDate = HelperService.formatDateWithTimezone(
+                new Date(schedule.endDate),
+                "Asia/Ho_Chi_Minh",
+            );
+
+            const events = await this.listEvents({
+                description: schedule.id,
+            });
+
+            if (!events) {
+                await this.createEvent({
+                    summary: schedule.title,
+                    location: "Online",
+                    description: schedule.description + "\n" + schedule.id,
+                    start: {
+                        dateTime: startDate,
+                        timeZone: "Asia/Ho_Chi_Minh",
+                    },
+                    end: {
+                        dateTime: endDate,
+                        timeZone: "Asia/Ho_Chi_Minh",
+                    },
+                    attendees: [],
+                });
+            } else {
+                // check if the event already exists in Google Calendar
+                const event = events.find((event) =>
+                    event?.description?.includes(schedule.id),
+                );
+
+                if (!event) {
+                    // create event
+                    await this.createEvent({
+                        summary: schedule.title,
+                        location: "Online",
+                        description: schedule.description + "\n" + schedule.id,
+                        start: {
+                            dateTime: startDate,
+                            timeZone: "Asia/Ho_Chi_Minh",
+                        },
+                        end: {
+                            dateTime: endDate,
+                            timeZone: "Asia/Ho_Chi_Minh",
+                        },
+                        attendees: [],
+                    });
+                } else {
+                    // update the event
+                    await calendar.events.patch({
+                        calendarId: "primary",
+                        eventId: event.id,
+                        requestBody: {
+                            summary: schedule.title,
+                            location: "Online",
+                            description:
+                                schedule.description + "\n" + schedule.id,
+                            start: {
+                                dateTime: startDate,
+                                timeZone: "Asia/Ho_Chi_Minh",
+                            },
+                            end: {
+                                dateTime: endDate,
+                                timeZone: "Asia/Ho_Chi_Minh",
+                            },
+                            attendees: [],
+                        },
+                    });
+                }
+            }
+        }
     }
 }

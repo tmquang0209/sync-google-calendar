@@ -16,18 +16,34 @@ export class ScheduleService {
         }
     }
 
-    async create(createScheduleDto: CreateScheduleDto) {
+    async create(createScheduleDto: CreateScheduleDto, userId: string) {
         const scheduleRefs = this.db.collection("schedules");
-        const created = await scheduleRefs.add(createScheduleDto); // Firestore method for adding a document
-        return created;
+        const created = await scheduleRefs.add({
+            ...createScheduleDto,
+            userId,
+            createdAt: new Date(),
+        }); // Firestore method for adding a document
+        return (await scheduleRefs.doc(created.id).get()).data();
     }
 
     async findAll() {
         const snapshot = await this.db.collection("schedules").get();
-        const schedules = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        const schedules: {
+            id: string;
+            title: string;
+            description: string;
+            startDate: Date;
+            endDate: Date;
+        }[] = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                title: data.title,
+                description: data.description,
+                startDate: data.startDate,
+                endDate: data.endDate,
+            };
+        });
         return schedules;
     }
 
@@ -47,7 +63,7 @@ export class ScheduleService {
         };
     }
 
-    remove(id: string) {
-        return `This action removes a #${id} schedule`;
+    async remove(id: string) {
+        await this.db.collection("schedules").doc(id).delete();
     }
 }

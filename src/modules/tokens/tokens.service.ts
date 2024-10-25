@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService, JwtSignOptions } from "@nestjs/jwt";
+import { UsersService } from "../users/users.service";
 
 @Injectable()
 export class TokensService {
@@ -12,15 +13,19 @@ export class TokensService {
     constructor(
         private readonly jwt: JwtService,
         private readonly configService: ConfigService,
+        private readonly usersService: UsersService,
     ) {}
 
-    generateAccessToken(userId: string): string {
+    async generateAccessToken(userId: string): Promise<string> {
         const options: JwtSignOptions = {
             ...this.BASE_OPTIONS,
             subject: userId,
         };
 
-        return this.jwt.sign({}, options);
+        // get user from database
+        const user = await this.usersService.findOne(userId);
+
+        return this.jwt.sign({ ...user }, options);
     }
 
     generateRefreshToken(userId: string): string {
@@ -31,5 +36,17 @@ export class TokensService {
         };
 
         return this.jwt.sign({}, options);
+    }
+
+    verifyAccessToken(token: string) {
+        return this.jwt.verify(token, {
+            ...this.BASE_OPTIONS,
+        });
+    }
+
+    verifyRefreshToken(token: string) {
+        return this.jwt.verify(token, {
+            ...this.BASE_OPTIONS,
+        });
     }
 }

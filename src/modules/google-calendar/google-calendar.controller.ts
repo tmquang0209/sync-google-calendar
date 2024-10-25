@@ -9,7 +9,7 @@ export class GoogleCalendarController {
 
     @Get("events")
     async listEvents() {
-        return this.googleCalendarService.listEvents();
+        return this.googleCalendarService.listEvents({});
     }
 
     @Get("oauth2callback")
@@ -20,11 +20,22 @@ export class GoogleCalendarController {
         // res.json({ message: "Authentication successful" });
 
         // Redirect to events page after successful authentication
-        return res.redirect("http://localhost:3002/google-calendar/events");
+        return res.redirect("http://localhost:3333/google-calendar/events");
     }
 
-    @Get("add-event")
-    async createEvent() {
-        return this.googleCalendarService.createEvent();
+    // @Get("add-event")
+    // async createEvent() {
+    //     return this.googleCalendarService.createEvent();
+    // }
+
+    @Get("/delete-event")
+    async deleteEvent(@Query("summary") summary: string) {
+        return this.googleCalendarService.deleteEventByKeyword(summary);
     }
+
+    // @Get("/sync")
+    // async syncEvents() {
+    //     // Sync schedules to Google Calendar
+    //     return this.googleCalendarService.syncEvents();
+    // }
 }
